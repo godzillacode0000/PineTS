@@ -161,7 +161,7 @@ Pine keeps the two in separate namespaces; the fix needs the reference resolver 
 given `fib` belongs to, and a wrong guess silently rewires field access rather than failing loudly. That is
 a change to make with the suite in front of you, not while a session is running out.
 
-## Open question — `syminfo.param is not a function` (2 indicators)
+## Resolved — `syminfo.param is not a function` (2 indicators): NOT an engine bug
 
 `relative-strength-scatter-plot` and `smt-divergences` die on the generated line
 
@@ -173,11 +173,10 @@ from Pine `syminfo.ticker(symA)` (line 218 of the first script). The transpiler 
 UFCS-style and picked `syminfo` as the namespace owning `param`, so the argument wrapper was emitted as
 `syminfo.param(...)` — a method `syminfo` does not have.
 
-Unresolved on purpose: I could not confirm from the TradingView reference whether `syminfo.ticker(symA)`
-is even valid Pine (the v6 reference page is JS-rendered, and the search backend 403'd). If it is NOT
-valid, these two are the scripts' own compile error and the engine-bug count drops by two; if it IS valid,
-the fix belongs where the transpiler chooses the namespace for the argument wrapper. Do not guess this one
-— check the reference first.
+Resolved: `syminfo.ticker` is a **variable** of type `simple string`, not a function (Pine reference, mirrored
+at codenamedevan/pinescriptv6 — "Type: simple string · See also: ticker.new()"). The scripts call it with an
+argument, which is a compile error on TradingView too, so these two are the scripts' own defect and the
+engine-bug count drops by two. Nothing to fix here.
 
 ## Bug 5 — `var` UDT instance + a field history read (the largest class: 14 indicators)
 
