@@ -178,3 +178,40 @@ is even valid Pine (the v6 reference page is JS-rendered, and the search backend
 valid, these two are the scripts' own compile error and the engine-bug count drops by two; if it IS valid,
 the fix belongs where the transpiler chooses the namespace for the argument wrapper. Do not guess this one
 — check the reference first.
+
+## Bug 5 — `var` UDT instance + a field history read (the largest class: 14 indicators)
+
+Minimal repro (`tools/field-history-repro.mjs`, 4 cases): `b.c[1]` runs, `b.c[n]` dies with
+`n is not defined`, `close[n]` runs — the fault is specific to a history read on a UDT **field**.
+
+```pine
+//@version=6
+indicator("field-history")
+type bar
+    int i
+    float c
+var bar b = bar.new(bar_index, close)
+n = input.int(5, minval = 1)
+plot(b.c[n])            // → ReferenceError: n is not defined
+```
+
+Generated: `plot.any($.get($.var.glb1_b, n).c, …)` — the index is left bare, and the history read is
+applied to the OBJECT.
+
+`transformMemberExpression` does this on purpose — its comment (ExpressionTransformer.ts, the branch at
+"Subscript on a UDT-field chain") states the premise:
+
+> `bar.low[N]` reads bar's `.low` from N bars ago. Since `bar = BAR.new()` runs every bar,
+> `$.let.glb1_bar` is a Series of PineTypeObject instances → `$.get(glb1_bar, N).low` is correct.
+
+That premise holds only when the instance is re-created every bar. With **`var bar b = bar.new(…)`** the
+object is created ONCE, so `$.get(b, N)` reads the variable's own history (the same object) and `.c`
+yields today's value — silently wrong numbers, not a crash. money-flow-profile uses `var` (line 60 of
+fibonacci-trailing-stop is the same shape), and the same class covers the `get_v` / `highs` failures in
+the other Pure Price Action scripts.
+
+Why no fix landed: scoping the index alone turns the crash into wrong values, which is worse than a loud
+failure. The real fix is to read the FIELD's history — `$.get(b.c, N)` — and the branch has to know
+whether the instance is `var`-declared, which is a question for the analysis pass (it already tracks
+`isUdtInstance`). Two conditions to satisfy before shipping: the repro's values must be right (compare
+against `b.c[1]`, which already works), and the suite must stay at its baseline.
