@@ -214,3 +214,23 @@ failure. The real fix is to read the FIELD's history — `$.get(b.c, N)` — and
 whether the instance is `var`-declared, which is a question for the analysis pass (it already tracks
 `isUdtInstance`). Two conditions to satisfy before shipping: the repro's values must be right (compare
 against `b.c[1]`, which already works), and the suite must stay at its baseline.
+
+## Bug 6 — drawing constructors are called, but the rows never land (the "0 series" bucket)
+
+The console reports "containers declared but the engine stored NO rows" for scripts that the sweep filed
+as "0 series". That message was ambiguous, so `tools/ctor-count.mjs` patches the drawing helper's
+prototype BEFORE the engine is built and counts the calls, then reads the container rows after the run:
+
+| script | box.new calls | rows in `__boxes__` |
+|---|---|---|
+| 1-2-3-reversal | 0 | 0 — its own conditions never fired (legitimate) |
+| 5-0 | 0 | 0 — same |
+| abcd | **12** | 3 placeholder rows — nothing drawable |
+| 8am-1h-range-breaks | **137** | 3 placeholder rows — nothing drawable |
+
+So the bucket is two different things, and the second one is an engine defect: the constructors run and
+return BoxObjects, yet the container keeps only the empty placeholders. Nothing can reach the overlay.
+This is the same practical outcome the operator sees as "the indicator does not appear".
+
+Next: `_createBox` (BoxHelper.ts, reached from `new()`) is where the object is stored — trace whether the
+row is written to the container the runner reads, or to a per-scope key the runner never looks at.
