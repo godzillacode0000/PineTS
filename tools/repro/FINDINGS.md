@@ -160,3 +160,21 @@ access on the instance, `fib.new()` is a type call), and renaming the INSTANCE h
 Pine keeps the two in separate namespaces; the fix needs the reference resolver to say which namespace a
 given `fib` belongs to, and a wrong guess silently rewires field access rather than failing loudly. That is
 a change to make with the suite in front of you, not while a session is running out.
+
+## Open question — `syminfo.param is not a function` (2 indicators)
+
+`relative-strength-scatter-plot` and `smt-divergences` die on the generated line
+
+```js
+const p245 = syminfo.param($.let.glb1_symA, undefined, 'p245');
+```
+
+from Pine `syminfo.ticker(symA)` (line 218 of the first script). The transpiler read that call as
+UFCS-style and picked `syminfo` as the namespace owning `param`, so the argument wrapper was emitted as
+`syminfo.param(...)` — a method `syminfo` does not have.
+
+Unresolved on purpose: I could not confirm from the TradingView reference whether `syminfo.ticker(symA)`
+is even valid Pine (the v6 reference page is JS-rendered, and the search backend 403'd). If it is NOT
+valid, these two are the scripts' own compile error and the engine-bug count drops by two; if it IS valid,
+the fix belongs where the transpiler chooses the namespace for the argument wrapper. Do not guess this one
+— check the reference first.
