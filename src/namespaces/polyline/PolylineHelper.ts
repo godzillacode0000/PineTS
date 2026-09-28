@@ -5,6 +5,7 @@ import { PolylineObject } from './PolylineObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
+import { drawingArray, PineArrayType } from '../array/PineArrayObject';
 
 export class PolylineHelper {
     private _polylines: PolylineObject[] = [];
@@ -209,7 +210,10 @@ export class PolylineHelper {
 
     // polyline.all — all active polyline objects
     get all(): PolylineObject[] {
-        return this._polylines.filter((pl) => !pl._deleted);
+        // TradingView documents this as array<polyline>: array.size(polyline.all) must work, while
+        // existing callers treat it as an array (`.length`, .filter). drawingArray() is both.
+        return drawingArray(this._polylines.filter((pl) => !pl._deleted),
+                            PineArrayType.polyline, this.context);
     }
 
     /**

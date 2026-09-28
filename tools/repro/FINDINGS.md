@@ -81,9 +81,42 @@ Same family, other indicators (also `ReferenceError`, also bare identifiers): `g
 defined` (birdies). I checked the obvious guess — a user variable colliding with a runtime helper name —
 and it is **not** that: five minimal cases with a variable named `get` all pass.
 
+## Bug 3 — a variable holding a collection is still unwrapped by `$.get(var, 0)`
+
+Why a local patch is not enough, and the most useful thing in this report.
+
+After fixing 1 and 2 (see the candidate commit on this branch: `drawingArray()` + `array.param()` passing
+collections through), `delta-flow-profile` **still** dies. Its Pine is:
+
+```pine
+allPolylines = polyline.all
+for i = 0 to array.size(allPolylines) - 1
+    polyline.delete(allPolylines.get(i))
+```
+
+and the emitted code is:
+
+```js
+$.let.if12_a_allPolylines = $.init($.let.if12_a_allPolylines, polyline.all);
+const p123 = array.param($.let.if12_a_allPolylines, undefined, 'p123');
+const temp_35 = array.size(p123);                        // now correct
+for (let i = 0; … array.size($.get($.let.if12_a_allPolylines, 0)) - 1 …)   // ← dies here
+```
+
+`$.get(x, 0)` takes the "forward array access" path in `Context.get()` (`Context.class.ts:806`), so a
+variable that holds a collection is read as **its last element** — `array.size(<element>)` then throws
+`Cannot read properties of undefined (reading 'size')`. The type inference pass does not carry
+"this variable holds `array<T>`" far enough to stop the history wrapper being emitted, so any script that
+stores `<drawing>.all` (or any array) in a variable and then passes it to `array.*` breaks — which is the
+ordinary way to write this loop.
+
+I stopped there rather than patch `$.get` to sniff collections: the runtime cannot know whether the call
+site wanted the collection or its element, so the fix belongs in type inference (or in a marker the
+transpiler checks before wrapping). Everything above is measured; this paragraph is where the boundary of
+a runtime-only patch is.
+
 ---
 
-Reproduce anything here with the repo's own toolchain:
 
 ```bash
 npm install

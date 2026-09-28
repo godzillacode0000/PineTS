@@ -6,6 +6,7 @@ import { LabelObject } from './LabelObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
+import { drawingArray, PineArrayType } from '../array/PineArrayObject';
 
 //prettier-ignore
 const LABEL_NEW_SIGNATURES = [
@@ -352,7 +353,10 @@ export class LabelHelper {
     // --- Property: all active labels ---
 
     get all(): LabelObject[] {
-        return this._labels.filter((l) => !l._deleted);
+        // TradingView documents this as array<label>: array.size(label.all) must work, while
+        // existing callers treat it as an array (`.length`, .filter). drawingArray() is both.
+        return drawingArray(this._labels.filter((l) => !l._deleted),
+                            PineArrayType.label, this.context);
     }
 
     /**

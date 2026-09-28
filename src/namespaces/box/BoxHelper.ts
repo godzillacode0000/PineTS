@@ -6,6 +6,7 @@ import { BoxObject } from './BoxObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
+import { drawingArray, PineArrayType } from '../array/PineArrayObject';
 
 //prettier-ignore
 const BOX_NEW_SIGNATURES = [
@@ -409,7 +410,10 @@ export class BoxHelper {
     }
 
     get all(): BoxObject[] {
-        return this._boxes.filter((b) => !b._deleted);
+        // TradingView documents this as array<box>: array.size(box.all) must work, while
+        // existing callers treat it as an array (`.length`, .filter). drawingArray() is both.
+        return drawingArray(this._boxes.filter((b) => !b._deleted),
+                            PineArrayType.box, this.context);
     }
 
     /**

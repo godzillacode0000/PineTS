@@ -5,6 +5,7 @@ import { LineObject } from '../line/LineObject';
 import { LinefillObject } from './LinefillObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
+import { drawingArray, PineArrayType } from '../array/PineArrayObject';
 
 export class LinefillHelper {
     private _linefills: LinefillObject[] = [];
@@ -170,7 +171,10 @@ export class LinefillHelper {
 
     // linefill.all — all active linefill objects
     get all(): LinefillObject[] {
-        return this._linefills.filter((lf) => !lf._deleted);
+        // TradingView documents this as array<linefill>: array.size(linefill.all) must work, while
+        // existing callers treat it as an array (`.length`, .filter). drawingArray() is both.
+        return drawingArray(this._linefills.filter((lf) => !lf._deleted),
+                            PineArrayType.linefill, this.context);
     }
 
     /**

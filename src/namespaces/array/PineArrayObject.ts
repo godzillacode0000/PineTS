@@ -56,6 +56,7 @@ export enum PineArrayType {
     label = 'label',
     line = 'line',
     linefill = 'linefill',
+    polyline = 'polyline',
     string = 'string',
     table = 'table',
 }
@@ -330,4 +331,54 @@ export class PineArrayObject {
     variance(...args: any[]) {
         return this._variance(this, ...args);
     }
+}
+
+/**
+ * A drawing namespace's `.all` list.
+ *
+ * TradingView documents these as `array<T>`: `array.size(polyline.all)` is documented usage. A bare JS
+ * array made that throw (`id.size is not a function`; `array.size` reads `id.array.length`), while a
+ * plain PineArrayObject broke consumers that treat the list as an array (`line.all.length` — the
+ * library's own tests do exactly that).
+ *
+ * So: the array itself, with PineArrayObject's fields grafted on and `.array` pointing at itself.
+ */
+export function drawingArray<T>(items: T[], type: PineArrayType, context: any): any {
+    const obj = new PineArrayObject(items, type, context);
+    const list: any = items;
+
+    // Own fields (the per-instance method factories) …
+    for (const key of Object.getOwnPropertyNames(obj)) {
+        if (key === 'array') continue;                 // handled below
+        list[key] = (obj as any)[key];
+    }
+
+    // … and everything on the prototype, because that is where `size()`, `get()`, `push()` live.
+    // Copying own properties alone left `polyline.all.size()` → "size is not a function": the class
+    // keeps its public API on the prototype, not on the instance.
+    let proto: any = Object.getPrototypeOf(obj);
+    while (proto && proto !== Object.prototype) {
+        for (const key of Object.getOwnPropertyNames(proto)) {
+            if (key === 'constructor' || key in list) continue;
+            const d = Object.getOwnPropertyDescriptor(proto, key);
+            if (!d) continue;
+            if (d.get || d.set) {
+                Object.defineProperty(list, key, {
+                    get: d.get ? d.get.bind(list) : undefined,
+                    set: d.set ? d.set.bind(list) : undefined,
+                    configurable: true,
+                });
+            } else if (typeof d.value === 'function') {
+                list[key] = d.value.bind(list);
+            } else {
+                list[key] = d.value;
+            }
+        }
+        proto = Object.getPrototypeOf(proto);
+    }
+
+    list.type = type;
+    list.context = context;
+    list.array = list;                                  // every array.* function reads id.array
+    return list;
 }

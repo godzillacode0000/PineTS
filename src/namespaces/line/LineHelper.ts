@@ -6,6 +6,7 @@ import { LineObject } from './LineObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
 import { silentInSecondary } from '../silentInSecondary';
+import { drawingArray, PineArrayType } from '../array/PineArrayObject';
 
 //prettier-ignore
 const LINE_NEW_SIGNATURES = [
@@ -370,7 +371,10 @@ export class LineHelper {
     // --- Property: all active lines ---
 
     get all(): LineObject[] {
-        return this._lines.filter((l) => !l._deleted);
+        // TradingView documents this as array<line>: array.size(line.all) must work, while
+        // existing callers treat it as an array (`.length`, .filter). drawingArray() is both.
+        return drawingArray(this._lines.filter((l) => !l._deleted),
+                            PineArrayType.line, this.context);
     }
 
     /**
