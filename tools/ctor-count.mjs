@@ -49,7 +49,7 @@ if (ctx && typeof ctx === 'object' && !Array.isArray(ctx)) {
         console.log(`containers (${containers.length}):`);
         for (const c of containers.slice(0, 10)) {
             const v = plots[c];
-            const rows = Array.isArray(v) ? v.length : (v?.array?.length ?? (typeof v === 'object' && v ? Object.keys(v).length : '?'));
+            const rows = v?.data?.length ?? (Array.isArray(v) ? v.length : '?');
             console.log(`   ${c} → ${rows} row(s)`);
         }
     }

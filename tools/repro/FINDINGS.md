@@ -228,9 +228,16 @@ prototype BEFORE the engine is built and counts the calls, then reads the contai
 | abcd | **12** | 3 placeholder rows — nothing drawable |
 | 8am-1h-range-breaks | **137** | 3 placeholder rows — nothing drawable |
 
-So the bucket is two different things, and the second one is an engine defect: the constructors run and
-return BoxObjects, yet the container keeps only the empty placeholders. Nothing can reach the overlay.
-This is the same practical outcome the operator sees as "the indicator does not appear".
+First reading was WRONG and is corrected here: a container is an OBJECT (`{title, data, …}`), so counting
+its keys said "3 rows" while the real row count is `data.length`. Reading `.data` shows **1 row for every
+container — and that single row packs every box the script built** (BoxHelper flushes `.data = [{ … }]`,
+a snapshot of the live objects, not a history). So the engine does NOT drop the drawings: 12 boxes for
+`abcd` and 137 for `8am-1h-range-breaks` are all inside that one row.
+
+The loss happens in OUR worker path: the console runs scripts in a Worker, and what comes back is counted
+as 0 rows by the runner, which is why the panel says "the engine stored NO rows" and the overlay stays
+empty. That is a plugin-side bug, not an upstream one — and it is the same practical outcome the operator
+sees as "the indicator does not appear".
 
 Next: `_createBox` (BoxHelper.ts, reached from `new()`) is where the object is stored — trace whether the
 row is written to the container the runner reads, or to a per-scope key the runner never looks at.
