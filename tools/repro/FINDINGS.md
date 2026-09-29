@@ -132,6 +132,24 @@ Environment: `pinets@0.10.0` (repo HEAD and npm latest), Node 26, Linux, 500 syn
 Three Library indicators die with `Identifier 'X' has already been declared` — `fibonacci-trailing-stop`
 (`fib`), `open-interest-chart` (`values`), `support-resistance-classification-vr` (`lab`).
 
+RESOLVED (29 Sep). Stage 1 emitted `const fib = Type({…})` AND `var fib = fib.new(…)` — two
+declarations of one identifier. The type now moves aside (`fib_$T<n>`) through its own map
+(`typeRenameMap`), followed by type references only: the TypeDefinition name, annotation strings and
+`X.new(…)` call sites. The variable keeps its name.
+
+Two details that cost a round each, both measured:
+
+* **Only `.new` may follow the rename.** A draft that followed every `fib.` renamed the FIELD read
+  too, and `plot(fib.p)` then plotted the type object instead of the field.
+* **Two guards had to widen**, or the rename never ran where it mattered: the rename pass is invoked
+  when `renameMap.size > 0 || typeRenameMap.size > 0` (a type-only rename left it empty), and a
+  function body is walked for the same reason — a UDT instance declared inside a function kept the
+  old type name in its `__pineTypedVar:` marker.
+
+`tests/transpiler/udt-name-shadow.test.ts` (4 cases: declaration, non-var instance, field values,
+annotation inside a function) — all 4 fail on the pre-fix sources. Live: `fibonacci-trailing-stop`
+and `open-interest-chart` now run on the chart.
+
 Minimal repro (`tools/udt-shadow-repro.mjs`, 2 cases, one passes):
 
 ```pine
