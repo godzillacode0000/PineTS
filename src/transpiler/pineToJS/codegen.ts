@@ -32,6 +32,13 @@ export class CodeGenerator {
     // UDT names that were renamed because they are JS reserved words
     // (`type new`). Type annotation strings naming them are rewritten too.
     private renamedTypeNames: Set<string>;
+
+    /** Types renamed because a VARIABLE shares their name (`type fib` + `var fib fib = …`). Kept
+     *  apart from the shared renameMap so the variable's own references keep their name. */
+    private typeRenameMap: Map<string, string>;
+
+    /** Every variable/parameter name declared anywhere — the set a UDT name must not collide with. */
+    private declaredVarNames: Set<string>;
     constructor(options: { indentStr?: string; sourceCode?: string; includeSourceComments?: boolean } = {}) {
         this.indent = 0;
         this.indentStr = options.indentStr || '  ';
@@ -195,11 +202,19 @@ export class CodeGenerator {
     private renameConflictingVariables(ast: any) {
         const renameMap = new Map<string, string>();
         this.renamedTypeNames = new Set();
+        this.typeRenameMap = new Map();
+        this.declaredVarNames = new Set();
+
+        // A UDT name that a variable also uses is valid Pine and invalid JS (`const fib` + `var fib`
+        // = `Identifier 'fib' has already been declared`; measured on fibonacci-trailing-stop,
+        // open-interest-chart, support-resistance-classification-vr), so collect the declared names
+        // first and let the type move aside below.
+        this.collectDeclaredVarNames(ast);
 
         // Collect conflicting variable names from the entire program
         this.collectConflictingVarNames(ast, renameMap);
 
-        if (renameMap.size > 0) {
+        if (renameMap.size > 0 || this.typeRenameMap.size > 0) {
             // Apply context-aware renaming across the entire program body
             this.renameVariableRefsInAST(ast, renameMap);
         }
@@ -212,8 +227,50 @@ export class CodeGenerator {
      * built-in type never appears in an annotation.
      */
     private renameTypeString(typeStr: any, renameMap: Map<string, string>): any {
-        if (typeof typeStr !== 'string' || this.renamedTypeNames.size === 0) return typeStr;
-        return typeStr.replace(/[A-Za-z_]\w*/g, (m) => (this.renamedTypeNames.has(m) && renameMap.has(m) ? renameMap.get(m)! : m));
+        if (typeof typeStr !== 'string') return typeStr;
+        if (this.renamedTypeNames.size === 0 && this.typeRenameMap.size === 0) return typeStr;
+        return typeStr.replace(/[A-Za-z_]\w*/g, (m) => {
+            if (this.typeRenameMap.has(m)) return this.typeRenameMap.get(m)!;
+            return this.renamedTypeNames.has(m) && renameMap.has(m) ? renameMap.get(m)! : m;
+        });
+    }
+
+    /** Collect every declared variable/parameter name (the set a UDT name must not collide with). */
+    private collectDeclaredVarNames(node: any) {
+        if (!node || typeof node !== 'object') return;
+
+        if (node.type === 'VariableDeclaration') {
+            for (const decl of node.declarations ?? []) {
+                if (decl.id?.type === 'Identifier') this.declaredVarNames.add(decl.id.name);
+                if (decl.id?.type === 'ArrayPattern') {
+                    for (const el of decl.id.elements ?? []) {
+                        if (el?.type === 'Identifier') this.declaredVarNames.add(el.name);
+                    }
+                }
+            }
+        }
+        if ((node.type === 'AssignmentExpression' || node.type === 'ReassignmentExpression') &&
+            node.left?.type === 'Identifier') {
+            this.declaredVarNames.add(node.left.name);
+        }
+        if (node.type === 'FunctionDeclaration') {
+            for (const p of node.params ?? []) {
+                const target = p.type === 'AssignmentPattern' ? p.left : p;
+                if (target?.type === 'Identifier') this.declaredVarNames.add(target.name);
+            }
+        }
+
+        for (const key of Object.keys(node)) {
+            if (key === 'type') continue;
+            const val = node[key];
+            if (Array.isArray(val)) {
+                for (const child of val) {
+                    if (child && typeof child === 'object') this.collectDeclaredVarNames(child);
+                }
+            } else if (val && typeof val === 'object' && val.type) {
+                this.collectDeclaredVarNames(val);
+            }
+        }
     }
 
     /**
@@ -285,6 +342,18 @@ export class CodeGenerator {
             this.renamedTypeNames.add(node.name);
         }
 
+        // A UDT whose name a VARIABLE also uses. Renaming it through the shared map would rename the
+        // variable's references too (they share one identifier at this stage), so the type gets its
+        // own map: the TypeDefinition name, annotation strings and `X.new(…)` call sites follow it,
+        // and nothing else does.
+        if (node.type === 'TypeDefinition' && typeof node.name === 'string' &&
+            !JS_RESERVED_WORDS.has(node.name) && this.declaredVarNames.has(node.name)) {
+            if (!this.typeRenameMap.has(node.name)) {
+                this.typeRenameMap.set(node.name, `${node.name}_$T${this.paramRenameCounter++}`);
+            }
+            this.renamedTypeNames.add(node.name);
+        }
+
         for (const key of Object.keys(node)) {
             if (key === 'type') continue;
             const val = node[key];
@@ -336,15 +405,16 @@ export class CodeGenerator {
             for (const p of node.params ?? []) {
                 if (p.type === 'AssignmentPattern' && p.right) this.renameVariableRefsInAST(p.right, bodyMap);
             }
-            if (bodyMap.size > 0) this.renameVariableRefsInAST(node.body, bodyMap);
+            if (bodyMap.size > 0 || this.typeRenameMap.size > 0) this.renameVariableRefsInAST(node.body, bodyMap);
             return;
         }
 
         // TypeDefinition: the type's own name plus field type annotations;
         // field defaults are ordinary expressions.
         if (node.type === 'TypeDefinition') {
-            if (typeof node.name === 'string' && renameMap.has(node.name)) {
-                node.name = renameMap.get(node.name)!;
+            if (typeof node.name === 'string') {
+                if (this.typeRenameMap.has(node.name)) node.name = this.typeRenameMap.get(node.name)!;
+                else if (renameMap.has(node.name)) node.name = renameMap.get(node.name)!;
             }
             for (const field of node.fields ?? []) {
                 field.type = this.renameTypeString(field.type, renameMap);
@@ -387,6 +457,16 @@ export class CodeGenerator {
                     this.renameVariableRefsInAST(arg, renameMap);
                 }
             }
+            return;
+        }
+
+        // `X.new(…)` where X is a renamed TYPE (a variable shares its name): the object is the type,
+        // so it follows the type's rename instead of the generic variable path. Only `.new` may follow
+        // it — `fib.p` is a FIELD read on the VARIABLE, which keeps its own name.
+        if (node.type === 'MemberExpression' && !node.computed &&
+            node.object?.type === 'Identifier' && node.property?.type === 'Identifier' &&
+            node.property.name === 'new' && this.typeRenameMap.has(node.object.name)) {
+            node.object.name = this.typeRenameMap.get(node.object.name)!;
             return;
         }
 
