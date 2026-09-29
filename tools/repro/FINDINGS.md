@@ -252,3 +252,45 @@ sees as "the indicator does not appear".
 
 Next: `_createBox` (BoxHelper.ts, reached from `new()`) is where the object is stored — trace whether the
 row is written to the container the runner reads, or to a per-scope key the runner never looks at.
+
+## Bug 7 — a comparison operand's member chain is never transformed (the `X is not defined` class)
+
+The biggest remaining class in the live sweep: 14 library scripts die with `ReferenceError: <name> is
+not defined` where `<name>` IS declared and IS scoped everywhere else in the same function (`get_v` ×3
+in the Pure Price Action set, plus `highs`, `get`, `timeCycles`, `bsNOTbodyUP`, `MSS`, `lastBar`,
+`currentPivot`, `gaps`, `pivH`, `lows`, `x`).
+
+Minimal repro (`tools/bisect2.mjs`, the `global if` case — six lines, reproduces at top level):
+
+```pine
+//@version=6
+indicator("b2")
+type SWING
+    float x
+    float y
+get_v = array.from(SWING.new(1.0, 2.0))
+pivot = get_v.get(0).y
+if pivot == get_v.get(1).y
+    plot(pivot)
+```
+
+emits `if ($.pine.math.__eq($.get($.let.glb1_pivot, 0), get_v.get(1).y))` — the LEFT operand is scoped,
+the RIGHT operand's chain is RAW.
+
+Bisect (`tools/bisect-bare-ident.mjs`): the trigger is the comparison operand being a member chain that
+ENDS in a UDT field access (`.y`). The same chain without the field (`pivot == get_v.get(1)`) is scoped;
+the same chain as an assignment RHS or as a call argument is scoped.
+
+Measured with env-guarded prints (since removed): `transformExpression` IS called with the if-test
+(`root= BinaryExpression … right= MemberExpression`), but its `MemberExpression` visitor is never hit
+for that operand — the walker does not descend into the right operand in this shape, so
+`transformMemberExpression` (and the UDT machinery in it) never sees the chain. `pivot`, an Identifier
+operand, is scoped by the Identifier visitor's `addArrayAccess` path — which is why exactly one side of
+the same comparison is correct.
+
+Next step: instrument the `BinaryExpression` visitor of `transformExpression`
+(`src/transpiler/transformers/StatementTransformer.ts`, the `c(node.right, state)` call) and print the
+operand's type at that moment — the shape suggests the LEFT operand's transformation replaces the
+parent in place (`Object.assign`), so the following `c(node.right, state)` may be reading a mutated
+node.
+
