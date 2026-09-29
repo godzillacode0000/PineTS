@@ -336,9 +336,28 @@ identifier is emitted bare. `market-structure-targets-model`, real bars, generat
 
 and the same pattern in `ichimoku-theories` (`timeCycles`), `ict-concepts` (`bsNOTbodyUP`),
 `periodic-activity-tracker` (`lastBar`), `probability-grid` (`currentPivot`) and
-`volume-bubbles-liquidity-heatmap` (`x`). `MSS` is ALSO a type name in that source, so this may share a
-root with Bug 4 (a variable whose name collides with a type): check the registry/rename path before
-treating them as separate bugs.
+`volume-bubbles-liquidity-heatmap` (`x`).
+
+### Three hypotheses, all FALSIFIED (29 Sep) — start here next time
+
+All six still fail after the four shipped patches; each of these was measured and can be skipped:
+
+1. **"It is the UDT name shadow"** — no: in `market-structure-targets-model` the TYPE is lowercase
+   `mss` and the VARIABLE is uppercase `MSS`, i.e. two different identifiers; the registry keys are
+   exact names (`ScopeManager` has no `toLowerCase`). A repro of that exact pair scopes correctly.
+2. **"It is an `else if`"** — the failing line IS an `else if (MSS.dir == 1 && close > …)`, but
+   `tools/elseif-bare-repro.mjs` shows `else if` inside a `method`, at top level, and a plain `if` all
+   scoped.
+3. **"It is the logical `&&`"** — the logical visitor recurses into both operands; no difference in the
+   repros.
+
+What is still different about the real site and NOT in any repro: the condition is
+`MSS.dir == 1 && close > aZZ.y.get(iH)` inside `$M_draw`, where the RIGHT operand is itself a member
+chain ending in a CALL argument (`aZZ.y.get(iH)`, with `iH` a function-scope local: `$$.let.fn8_iH`).
+Next: build the repro around BOTH sides being member chains inside one `and` in a method, and instrument
+`transformIdentifier` for the `MSS` node (print `isContextBound`, `isUdtTypeName`, the scope type and
+whether `_skipTransformation` is set) — the three falsified hypotheses above say the answer is in the
+identifier's own guards, not in the walker.
 
 ## Bug 8 — a UFCS method call on a LITERAL receiver (`'none'.box(obj)`)
 
