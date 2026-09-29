@@ -294,3 +294,31 @@ operand's type at that moment — the shape suggests the LEFT operand's transfor
 parent in place (`Object.assign`), so the following `c(node.right, state)` may be reading a mutated
 node.
 
+### FIXED — and six of the fourteen are a SECOND shape
+
+The cause was in `transformExpression`'s own `MemberExpression` visitor: it recursed only into
+**Identifier** objects (`if (node.object.type === 'Identifier' …)`), so the base of a chain whose
+object is itself a member call — `get_v.get(1).y` — was never visited. The fix mirrors
+`MainTransformer`'s visitor: recurse into `MemberExpression` / `CallExpression` objects first.
+`tests/transpiler/comparison-member-chain.test.ts` (3 cases; all 3 fail on the pre-fix sources; both
+the true and the false branch are pinned so a fix that only stops the crash is caught).
+
+Measured on real bars, the fix turns SEVEN of the class green: `pure-price-action-ict-tools`,
+`pure-price-action-liquidity-sweeps`, `pure-price-action-order-breaker-blocks`,
+`adaptive-momentum-oscillator`, `birdies`, `session-gap-fill`,
+`trendlines-with-breaks-oscillator` (the `get_v` / `highs` / `get` / `gaps` names).
+
+The rest die on a DIFFERENT shape, same family — a **non-computed** UDT field access whose object
+identifier is emitted bare. `market-structure-targets-model`, real bars, generated line 682:
+
+```js
+} else if ($.pine.math.__eq(MSS.dir, 1) && …)     // MSS bare — while the SAME chain 8 lines later is
+                                                   // $.get($.var.glb1_MSS, 0).<field>
+```
+
+and the same pattern in `ichimoku-theories` (`timeCycles`), `ict-concepts` (`bsNOTbodyUP`),
+`periodic-activity-tracker` (`lastBar`), `probability-grid` (`currentPivot`) and
+`volume-bubbles-liquidity-heatmap` (`x`). `MSS` is ALSO a type name in that source, so this may share a
+root with Bug 4 (a variable whose name collides with a type): check the registry/rename path before
+treating them as separate bugs.
+

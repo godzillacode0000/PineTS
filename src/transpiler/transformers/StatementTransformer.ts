@@ -1047,6 +1047,16 @@ export function transformWhileStatement(node: any, scopeManager: ScopeManager, c
 export function transformExpression(node: any, scopeManager: ScopeManager): void {
     walk.recursive(node, scopeManager, {
         MemberExpression(node: any, state: ScopeManager, c: any) {
+            // Recurse into nested member/call chains FIRST, the way the main pass does
+            // (`MainTransformer` does the same for `node.object`): the base of a chain whose object is
+            // itself a member call — `get_v.get(1).y` — was never visited, because this visitor only
+            // descended into Identifier objects. Its identifier stayed RAW and the run died with
+            // `ReferenceError: get_v is not defined` in a comparison operand; the same chain in an
+            // assignment RHS or a call argument went through other paths and was scoped correctly.
+            if (node.object && (node.object.type === 'MemberExpression' || node.object.type === 'CallExpression')) {
+                node.object.parent = node;
+                c(node.object, state);
+            }
             // Recurse into non-context-bound Identifier objects for DOT access only
             // (e.g. Signal.Buy where Signal is an enum). Skip computed/bracket access
             // (e.g. aa[0]) — those are handled by transformArrayIndex inside
