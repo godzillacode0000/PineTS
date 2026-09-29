@@ -209,11 +209,22 @@ yields today's value — silently wrong numbers, not a crash. money-flow-profile
 fibonacci-trailing-stop is the same shape), and the same class covers the `get_v` / `highs` failures in
 the other Pure Price Action scripts.
 
-Why no fix landed: scoping the index alone turns the crash into wrong values, which is worse than a loud
-failure. The real fix is to read the FIELD's history — `$.get(b.c, N)` — and the branch has to know
-whether the instance is `var`-declared, which is a question for the analysis pass (it already tracks
-`isUdtInstance`). Two conditions to satisfy before shipping: the repro's values must be right (compare
-against `b.c[1]`, which already works), and the suite must stay at its baseline.
+RESOLVED (29 Sep) — both halves are fixed and measured:
+
+* The INDEX is transformed at the call site now (`transformIndexExpression`), so `b.i[rpLN]` no longer
+  emits a bare identifier (`ReferenceError: rpLN is not defined`).
+* A `var` instance reads the FIELD's history: the branches ask the scope manager for the declaration
+  kind (`getVariable(name)[1] === 'var'`) and accumulate `$.get(<base>, 0).field` per bar with
+  `$.param`, then look N back (`udtFieldHistory`). A per-bar instance keeps the old shape
+  (`$.get(<base>, N).field`) — the engine stores a NEW object every bar, so that read is already the
+  field as of N bars ago.
+
+Values are checked against the SOURCE, not against the engine: with `b.c := close` on every bar,
+`b.c[1]` must equal `close[1]` — measured equal, and NOT equal to the current value (which is exactly
+what the bug produced). `tests/transpiler/udt-field-history.test.ts` carries four cases (var /
+variable index / reassigned index / per-bar guard); three of them fail on the pre-fix sources.
+Suite: 16 failed | 2508 passed before and after — the baseline (the known
+`tests/core/pinescript.test.ts` failures) is unchanged.
 
 ## Bug 6 — drawing constructors are called, but the rows never land (the "0 series" bucket)
 
