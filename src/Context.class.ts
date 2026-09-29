@@ -3,6 +3,7 @@
 
 import { IProvider, ISymbolInfo } from './marketData/IProvider';
 import { PineArray } from './namespaces/array/array.index';
+import { DrawingArray } from './namespaces/DrawingArray';
 import { PineMap } from './namespaces/map/map.index';
 import { PineMatrix } from './namespaces/matrix/matrix.index';
 import { Barstate } from './namespaces/Barstate';
@@ -654,9 +655,12 @@ export class Context {
         if (src instanceof Series) {
             value = src.get(0);
         } else if (Array.isArray(src)) {
-            // Handle 2D arrays (tuples wrapped by $.precision() or from request.security)
-            // e.g., [[a, b]] from return $.precision([[a, b]]) or request.security tuple
-            if (Array.isArray(src[0])) {
+            // `<drawing>.all`: the array IS the value. Indexing it (below) handed the variable its
+            // LAST drawing — or `undefined` on an empty chart, which is how money-flow-profile died
+            // at `array.size(a_allPolylines)`.
+            if (src instanceof DrawingArray) {
+                value = src;
+            } else if (Array.isArray(src[0])) {
                 value = src[0];
             } else {
                 // Flat 1D array = time-series data (forward-ordered)
@@ -728,7 +732,9 @@ export class Context {
         if (src instanceof Series) {
             value = src.get(0);
         } else if (Array.isArray(src)) {
-            if (Array.isArray(src[0])) {
+            if (src instanceof DrawingArray) {
+                value = src;
+            } else if (Array.isArray(src[0])) {
                 value = src[0];
             } else {
                 value = this.precision(src[src.length - 1]);

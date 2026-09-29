@@ -1,3 +1,5 @@
+import { DrawingArray } from './namespaces/DrawingArray';
+
 export class Series {
     constructor(public data: any[], public offset: number = 0) { }
 
@@ -34,7 +36,9 @@ export class Series {
 
     static from(source: any): Series {
         if (source instanceof Series) return source;
-        if (Array.isArray(source)) return new Series(source);
+        // A DrawingArray (`<drawing>.all`) IS the value, not a series of values: wrap it whole
+        // so a read of the variable hands the array over, which is what Pine's array<T> says.
+        if (Array.isArray(source)) return new Series(source instanceof DrawingArray ? [source] : source);
         if (source != null && typeof source === 'object' && '__value' in source) {
             const inner = source.__value;
             // Dual-use helpers (time, time_close, ...) expose their backing Series.

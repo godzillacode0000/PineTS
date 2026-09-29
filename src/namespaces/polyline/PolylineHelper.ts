@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Series } from '../../Series';
+import { DrawingArray } from '../DrawingArray';
 import { PolylineObject } from './PolylineObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
 import { NAHelper } from '../Core';
@@ -209,7 +210,7 @@ export class PolylineHelper {
 
     // polyline.all — all active polyline objects
     get all(): PolylineObject[] {
-        return this._polylines.filter((pl) => !pl._deleted);
+        return DrawingArray.from(this._polylines.filter((pl) => !pl._deleted)) as unknown as PolylineObject[];
     }
 
     /**

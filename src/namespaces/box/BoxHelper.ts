@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Series } from '../../Series';
+import { DrawingArray } from '../DrawingArray';
 import { parseArgsForPineParams } from '../utils';
 import { BoxObject } from './BoxObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
@@ -409,7 +410,7 @@ export class BoxHelper {
     }
 
     get all(): BoxObject[] {
-        return this._boxes.filter((b) => !b._deleted);
+        return DrawingArray.from(this._boxes.filter((b) => !b._deleted)) as unknown as BoxObject[];
     }
 
     /**

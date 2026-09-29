@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Series } from '../../Series';
+import { DrawingArray } from '../DrawingArray';
 import { parseArgsForPineParams } from '../utils';
 import { LabelObject } from './LabelObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
@@ -352,7 +353,7 @@ export class LabelHelper {
     // --- Property: all active labels ---
 
     get all(): LabelObject[] {
-        return this._labels.filter((l) => !l._deleted);
+        return DrawingArray.from(this._labels.filter((l) => !l._deleted)) as unknown as LabelObject[];
     }
 
     /**

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Series } from '../../Series';
+import { DrawingArray } from '../DrawingArray';
 import { LineObject } from '../line/LineObject';
 import { LinefillObject } from './LinefillObject';
 import { NAHelper } from '../Core';
@@ -170,7 +171,7 @@ export class LinefillHelper {
 
     // linefill.all — all active linefill objects
     get all(): LinefillObject[] {
-        return this._linefills.filter((lf) => !lf._deleted);
+        return DrawingArray.from(this._linefills.filter((lf) => !lf._deleted)) as unknown as LinefillObject[];
     }
 
     /**

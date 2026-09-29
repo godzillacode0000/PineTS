@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { Series } from '../../Series';
+import { DrawingArray } from '../DrawingArray';
 import { parseArgsForPineParams } from '../utils';
 import { LineObject } from './LineObject';
 import { ChartPointObject } from '../chart/ChartPointObject';
@@ -370,7 +371,7 @@ export class LineHelper {
     // --- Property: all active lines ---
 
     get all(): LineObject[] {
-        return this._lines.filter((l) => !l._deleted);
+        return DrawingArray.from(this._lines.filter((l) => !l._deleted)) as unknown as LineObject[];
     }
 
     /**
