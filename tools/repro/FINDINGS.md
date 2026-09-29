@@ -340,3 +340,43 @@ and the same pattern in `ichimoku-theories` (`timeCycles`), `ict-concepts` (`bsN
 root with Bug 4 (a variable whose name collides with a type): check the registry/rename path before
 treating them as separate bugs.
 
+## Bug 8 — a UFCS method call on a LITERAL receiver (`'none'.box(obj)`)
+
+`breakout-detector-previous-mtf-high-low-levels` dies with `"none".box is not a function`. The source
+calls a user method through UFCS on a string literal:
+
+```pine
+method box(string s, Tbreak obj) => …      // line 73
+…
+'none'.box(bxBtmBreak)                     // lines 242 and 313
+```
+
+and the emitted line keeps a member call on the literal:
+
+```js
+('none').box($.get($.var.glb1_bxBtmBreak, 0));      // generated line 841
+```
+
+Mechanism, from `transformCallExpression`'s dispatch block (ExpressionTransformer.ts, ~1798-1870): the
+receiver's static type is derived from `_obj.name` (Identifier / `$.get`-wrapped) or from a UDT field
+chain — a **Literal** receiver has no name, so `receiverBaseType` stays undefined. The
+unknown-receiver fallback (`dispatchOnUnknownReceiver`) is then disabled precisely because `box` IS in
+`BUILTIN_METHOD_NAMES` (`box.new`, `box.delete`…), so nothing retargets the call and it stays
+`("none").box(...)`.
+
+Proposed fix (small): give a Literal receiver its Pine type before the dispatch decision —
+`'…' → 'string'`, integer → `'int'`, other numbers → `'float'` — so `receiverTypeMatches` can fire
+against `method box(string s, …)`.
+
+**Reduction NOT achieved yet — measure before trusting the paragraph above.** `tools/ufcs-literal-repro.mjs`
+(a `'none'.box(b)` call plus a UDT-receiver call, same file) RUNS, and `tools/ufcs-literal-repro2.mjs`
+shows the same call working at top level, inside an `if`, and inside a switch arm. The real call sites
+(lines 242, 313) sit in a switch whose arms contain a NESTED switch and comma-joined statements, so the
+trigger is probably that context (or the method's registration order at that point in the file), not the
+literal receiver alone. Note also that the variant with the call as a switch ARM VALUE dies in the
+parser with `Multiple default clauses (17:4)` — a separate bug in switch parsing, worth its own repro.
+
+Note the same script has a SECOND mis-lowering on lines 845-846 —
+`$.param('btm', $.get($.get($.get($.get(undefined, 0), 0), 0), 0), 'p233')` — a receiver turned into
+`undefined` inside a deeply nested `$.get`; that is a separate shape, not this one.
+
