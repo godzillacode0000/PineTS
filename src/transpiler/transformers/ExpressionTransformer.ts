@@ -189,6 +189,20 @@ export function transformIndexExpression(property: any, scopeManager: ScopeManag
         property.type === 'LogicalExpression' || property.type === 'ConditionalExpression') {
         return transformOperand(property, scopeManager, namespace);
     }
+    // A member read AS the index (`high[nId[1]]` — the offset IS `nId[1]`): this lowerer is the only
+    // one that ever sees it, and leaving it alone kept the base identifier bare — the
+    // `ReferenceError: bsNOTbodyUP is not defined` of ict-concepts' `math.min(lPh[bsNOTbodyUP[1]], …)`.
+    if (property.type === 'MemberExpression') {
+        transformMemberExpression(property, '', scopeManager);
+        return property;
+    }
+    // Same for a call used as the index (`high[math.max(nId, 1)]`).
+    if (property.type === 'CallExpression') {
+        if (!property._transformed) {
+            transformCallExpression(property, scopeManager);
+        }
+        return property;
+    }
     return property;
 }
 
@@ -772,6 +786,15 @@ function transformOperand(node: any, scopeManager: ScopeManager, namespace: stri
                 return ASTFactory.createGetCall(valueExpr, node.property);
             }
 
+            // A member chain whose object is a CALL (`array.first(timeCycles).firstBarIndex`): the
+            // call's own arguments are user variables, and no walker that reaches this operand
+            // descends into them — the guard on the CallExpression visitor of the enclosing walk
+            // replaces the base descent, so the argument stays bare and dies with
+            // `ReferenceError: timeCycles is not defined` (ichimoku-theories).
+            if (node.object.type === 'CallExpression' && !node.object._transformed) {
+                transformCallExpression(node.object, scopeManager);
+            }
+
             // Handle array access
             const transformedObject = (node.object.type === 'Identifier' && !isNamespacePropAccess)
                 ? transformIdentifierForParam(node.object, scopeManager)
@@ -1250,6 +1273,10 @@ export function transformFunctionArgument(arg: any, namespace: string, scopeMana
             // Recursively transform identifiers inside complex index expressions
             // e.g. close[strideInput * 2] → ta.param(close, $.get($.let.glb1_strideInput, 0) * 2, 'p2')
             transformedProperty = transformOperand(arg.property, scopeManager, namespace);
+        } else if (arg.property.type === 'MemberExpression' || arg.property.type === 'CallExpression') {
+            // The index is itself a read or a call (`high[nId[1]]`, `high[math.max(a, 1)]`) — this
+            // branch used to pass it through untouched, so nothing scoped its base identifier.
+            transformedProperty = transformIndexExpression(arg.property, scopeManager, namespace);
         } else {
             transformedProperty = arg.property;
         }
