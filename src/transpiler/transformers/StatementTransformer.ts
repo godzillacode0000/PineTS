@@ -417,6 +417,15 @@ export function transformVariableDeclaration(varNode: any, scopeManager: ScopeMa
                             // Continue walking the arguments
                             node.arguments.forEach((arg) => c(arg, { parent: node }));
                         },
+                        // The same rule as the implicit-return walker: a declaration reached by this
+                        // walk — the arms of a `switch` that sits inside an IIFE (a tuple-returning
+                        // function's last expression) are visited from here — must go through the
+                        // standard declaration lowering. Left as-is it keeps a plain JS `let` while
+                        // its readers resolve through the context store, and the arm dies with
+                        // `ReferenceError: x is not defined` (volume-bubbles-liquidity-heatmap).
+                        VariableDeclaration(node: any) {
+                            transformVariableDeclaration(node, scopeManager);
+                        },
                         BinaryExpression(node: any, state: any, c: any) {
                             // Set parent references for operands
                             if (node.left.type === 'Identifier') {
@@ -1540,6 +1549,17 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
                             newBody.push(stmt);
                         });
                         node.body = newBody;
+                    },
+                    // A declaration reached by THIS walk must go through the standard declaration
+                    // lowering like every other one. The statements inside a switch arm are visited
+                    // by these visitors (the switch belongs to an implicit return), so a declaration
+                    // there — e.g. the AnalysisPass's split of `[x, y] = f()` into
+                    // `let temp_N …; let x …; let y …` — otherwise keeps its plain JS `let` form
+                    // while the READERS resolve through the context store: the arm then dies with
+                    // `ReferenceError: x is not defined` (volume-bubbles-liquidity-heatmap, 1 Oct),
+                    // and the temp is written to a JS local that nothing reads.
+                    VariableDeclaration(node: any, state: ScopeManager) {
+                        transformVariableDeclaration(node, state);
                     },
                 });
             }
