@@ -534,3 +534,30 @@ Note the same script has a SECOND mis-lowering on lines 845-846 —
 `$.param('btm', $.get($.get($.get($.get(undefined, 0), 0), 0), 0), 'p233')` — a receiver turned into
 `undefined` inside a deeply nested `$.get`; that is a separate shape, not this one.
 
+### RESOLVED (patch 8, `ba5aa4c`): the name-collision class, found by the audit's #26
+
+The audit flagged `isArrayPatternElement` as "a set of NAMES across the whole program — a same-named
+IIFE local will be lowered", with no test. Writing that test found the defect was LIVE, not
+theoretical:
+
+```pine
+split() => [x, y] = ...        // makes `p` an array-pattern element, program-wide
+[p, q] = split()
+w = switch
+    p > 0 =>
+        p = close[1]           // a USER local that shares the element's name
+        p + 1
+```
+
+`close[1]` in a declaration IS a computed member expression, so the shape heuristic at the lowering
+did not save it — it was treated as a tuple element and became
+`$.get($.let.close, 0)[1]` (a tuple read of the wrong store), throwing
+`TypeError: Cannot read properties of undefined (reading '1')` at runtime. Measured on `073fbaa`.
+
+Fix: the AnalysisPass marks the declarators its own split built (`_arrayPatternSplit`), the
+transformers match that marker instead of the name set, and the walkers additionally route a
+declaration that REASSIGNS a name the context already knows (an arm's `p = 10` must land in the outer
+store) while a fresh IIFE local stays a plain JS local. `tests/transpiler/tuple-element-name-collision.test.ts`
+(4 cases; the history-read pair fails on `073fbaa`, 2/4). The six scripts of the bare-member class all
+still run, and the suite sits at its baseline (`16 failed | 2538 passed`).
+
