@@ -390,7 +390,38 @@ and both are verified live on the chart.
 **Five of the class's six scripts now run.** The sixth, `volume-bubbles-liquidity-heatmap`, is a
 DIFFERENT bug — next target, and the diagnosis is already in hand (see below).
 
-### NEXT (not started): a tuple destructuring inside a switch arm loses its scope
+### RESOLVED (1 Oct, patch 7) — a declaration reached by a walker now keeps its scope and store
+
+`volume-bubbles-liquidity-heatmap` died with `ReferenceError: x is not defined` in `drawLabel`:
+
+```pine
+    [labelPoint, labelStyle] = switch switchData
+        TOP =>
+            [x, y] = coordinates(anchorBar, anchorPrice, angle, radiusBar, radiusPrice)
+            [chart.point.new(na,x,y),label.style_label_down]
+```
+
+The diagnosis below was right about the symptom and wrong about the cure. The block is real, but the
+reason it mattered is that the split declarations never went through the STANDARD lowering: the
+statements of a switch arm are reached by a WALKER (the implicit return's when the switch is a
+function's last statement, the declaration-init's when the switch is the value of a destructuring) and
+those walkers visited identifiers and calls but never a VariableDeclaration. So the arm kept
+
+```js
+              let temp_1 = $.call(coordinates, "_fn0", …);   // a JS local, in an inner block …
+              let x = $.get($.let.temp_1, 0);                // … read from a store nothing wrote
+```
+
+Both walkers now route a declaration to `transformVariableDeclaration`, so the arm's names land in the
+context store with their scope prefix — `$$.let.fn4_x = $.init($$.let.fn4_x, …)` — the shape every
+other declaration gets and one a block cannot hide.
+
+`tests/transpiler/tuple-in-switch-arm.test.ts` (4 cases, BOTH walkers; all 4 fail on the parent commit
+with `ReferenceError: a is not defined`). The script runs offline (158 boxes + 100 labels + 83 lines +
+100 polylines over 16,560 bars) and live on the chart (984 ms, 7 boxes + 5 lines + 7 labels + 4 series
+paths, read back on screen). **That closes the six-script class: all six run.**
+
+#### The original diagnosis, kept for the record
 
 `volume-bubbles-liquidity-heatmap` dies with `ReferenceError: x is not defined` in `drawLabel`:
 
