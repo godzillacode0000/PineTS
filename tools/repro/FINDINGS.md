@@ -338,7 +338,33 @@ and the same pattern in `ichimoku-theories` (`timeCycles`), `ict-concepts` (`bsN
 `periodic-activity-tracker` (`lastBar`), `probability-grid` (`currentPivot`) and
 `volume-bubbles-liquidity-heatmap` (`x`).
 
-### Three hypotheses, all FALSIFIED (29 Sep) — start here next time
+### RESOLVED (1 Oct) — two walkers that transformed the node and never recursed
+
+The answer WAS in a walker, but not in the identifier's guards the hypotheses pointed at. A trace
+(`PINETS_DEBUG_IDENT`) showed `transformMemberExpression` being reached for `MSS.dir` while
+`transformIdentifier` never saw `MSS` at all — the visitor had transformed the node and stopped. Two
+walkers did exactly that, and between them they own every failing site in this class:
+
+1. **a method's implicit return**, where a `switch` lives. Its arm tests are comparisons full of
+   member chains — and `transformCallExpression` scopes the CALL chains beside a member read, which
+   is why `aZZ.y.get(iH)` looked fine in the same expression while `MSS.dir` stayed bare.
+2. **a returned tuple** — `[lastBar.buy, lastBar.sell]`: that branch called
+   `transformMemberExpression` and returned the element untouched, with no walker at all.
+
+Both now share one visitor set (`tupleExpressionVisitors`) that scopes a chain's base, skipping
+context-bound namespace objects — the pattern every other member visitor in the file already used.
+`tests/transpiler/implicit-return-member-base.test.ts`: 4 cases (generated-code signature + runtime),
+all 4 failing on the parent commit in a worktree, all 4 passing after.
+
+Measured offline on the fork's fixtures — these now RUN: `market-structure-targets-model` (444 labels
++ 500 lines), `probability-grid` (100 boxes + 500 labels + 20 lines), `periodic-activity-tracker`
+(8 boxes + 4 labels + 5 series). Live on the chart: `market-structure-targets-model` runs in 829 ms
+and paints 7 lines + 7 labels, read back on screen.
+
+**Still failing, next repro targets:** `ichimoku-theories` (`timeCycles`), `ict-concepts`
+(`bsNOTbodyUP`), `volume-bubbles-liquidity-heatmap` (`x`) — same family, shapes not yet reduced.
+
+#### For the record — the three hypotheses falsified on 29 Sep (superseded, kept so they are not retried)
 
 All six still fail after the four shipped patches; each of these was measured and can be skipped:
 
