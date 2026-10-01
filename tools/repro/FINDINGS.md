@@ -421,6 +421,16 @@ with `ReferenceError: a is not defined`). The script runs offline (158 boxes + 1
 100 polylines over 16,560 bars) and live on the chart (984 ms, 7 boxes + 5 lines + 7 labels + 4 series
 paths, read back on screen). **That closes the six-script class: all six run.**
 
+**The first cut of this fix was too broad, and the suite caught it** (25 failed against the 16
+baseline): routing EVERY declaration reached by those walkers to `transformVariableDeclaration` also
+lowered an IIFE's own plain JS locals — a loop-as-expression's accumulator (`let __result;` +
+`__result = [i, i*2]` inside the loop + `return __result`) became `$.let.x = undefined`, and the reads
+answered NaN (`tests/transpiler/tuple-parity.test.ts`, the runtime half of `parser-fixes.test.ts`).
+Both visitors now route ONLY what the AnalysisPass's ArrayPattern split produced — the temp (marked
+`_tupleArity`) and the pattern elements — and a `for` header declaration is flagged and left alone so
+the header cannot be garbled (`SyntaxError: Unexpected token ';'`). Commit `073fbaa`; the three
+affected files are 126/126.
+
 #### The original diagnosis, kept for the record
 
 `volume-bubbles-liquidity-heatmap` dies with `ReferenceError: x is not defined` in `drawLabel`:
