@@ -1168,8 +1168,17 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
         Identifier(node: any, state: ScopeManager) {
             transformIdentifier(node, state);
             if (node.type === 'Identifier' && !node._arrayAccessed) {
-                addArrayAccess(node, state);
-                node._arrayAccessed = true;
+                // A reference that is ALREADY scoped (`$$.const.x`, `$.let.y`) must not have its base
+                // wrapped again — the sibling walkers guard this with the same namespace test, and
+                // without it `$$` came back as `$.get($$, 0)` (caught by pinets-source-to-js).
+                const isScopedBase =
+                    node.name === CONTEXT_NAME || node.name === '$$' ||
+                    (node.parent && node.parent.type === 'MemberExpression' && node.parent.object === node &&
+                        scopeManager.isContextBound(node.name));
+                if (!isScopedBase) {
+                    addArrayAccess(node, state);
+                    node._arrayAccessed = true;
+                }
             }
         },
         MemberExpression(node: any, state: ScopeManager, c: any) {
@@ -1415,8 +1424,16 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
                         transformIdentifier(node, state);
                         // Add array access if needed
                         if (node.type === 'Identifier' && !node._arrayAccessed) {
-                            addArrayAccess(node, state);
-                            node._arrayAccessed = true;
+                            // Same guard as the tuple visitors: a reference that is already scoped must
+                            // not have its base wrapped again (`$$` → `$.get($$, 0)`).
+                            const isScopedBase =
+                                node.name === CONTEXT_NAME || node.name === '$$' ||
+                                (node.parent && node.parent.type === 'MemberExpression' && node.parent.object === node &&
+                                    scopeManager.isContextBound(node.name));
+                            if (!isScopedBase) {
+                                addArrayAccess(node, state);
+                                node._arrayAccessed = true;
+                            }
                         }
                     },
                     MemberExpression(node: any, state: ScopeManager, c: any) {
