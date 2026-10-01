@@ -361,8 +361,69 @@ Measured offline on the fork's fixtures — these now RUN: `market-structure-tar
 (8 boxes + 4 labels + 5 series). Live on the chart: `market-structure-targets-model` runs in 829 ms
 and paints 7 lines + 7 labels, read back on screen.
 
-**Still failing, next repro targets:** `ichimoku-theories` (`timeCycles`), `ict-concepts`
-(`bsNOTbodyUP`), `volume-bubbles-liquidity-heatmap` (`x`) — same family, shapes not yet reduced.
+**Then-failing, now split:** `ichimoku-theories` (`timeCycles`) and `ict-concepts` (`bsNOTbodyUP`)
+were RESOLVED by patch 6 (below); `volume-bubbles-liquidity-heatmap` (`x`) turned out to be a
+different bug — a declaration-scope defect, diagnosed at the end of this file.
+
+### RESOLVED (1 Oct, patch 6) — two more operands no walker descended into
+
+Both only bite through the `*.param(...)` wrapper, which is why simplifications kept running:
+
+- **An index that is itself a read** (`high[nId[1]]`): the array-access branch of the argument lowerer
+  handled an Identifier index and a binary/unary/logical/conditional one and fell through to "use the
+  node untouched" for everything else, so nothing scoped the base of `nId[1]` — ict-concepts'
+  `lwst = math.min(lPh[bsNOTbodyUP[1]], low[bsNOTbodyUP[1]])`
+  (`ReferenceError: bsNOTbodyUP is not defined`). Fix: `transformIndexExpression` lowers a member (and
+  a call) index too.
+- **A call that is the OBJECT of a member chain** (`array.first(timeCycles).firstBarIndex`): the
+  walker visitor in the operand path replaces the base descent (it transforms the call, never
+  recursing), so the call's arguments were never walked — ichimoku-theories'
+  `lowest := ta.lowest(bar_index - array.first(timeCycles).firstBarIndex) - atr200`
+  (`ReferenceError: timeCycles is not defined`). Fix: the operand path transforms a CallExpression
+  object before using it.
+
+`tests/transpiler/index-and-call-operands.test.ts` (4 cases; all 4 fail on the parent commit — the two
+runtime cases with those two ReferenceErrors — all 4 pass after). Both scripts run offline
+(ichimoku-theories: 24 labels + 27 lines + 10 polylines; ict-concepts: 4 labels + 20 lines + 12 boxes)
+and both are verified live on the chart.
+
+**Five of the class's six scripts now run.** The sixth, `volume-bubbles-liquidity-heatmap`, is a
+DIFFERENT bug — next target, and the diagnosis is already in hand (see below).
+
+### NEXT (not started): a tuple destructuring inside a switch arm loses its scope
+
+`volume-bubbles-liquidity-heatmap` dies with `ReferenceError: x is not defined` in `drawLabel`:
+
+```pine
+        TOP =>
+            [x, y] = coordinates(anchorBar, anchorPrice, angle, radiusBar, radiusPrice)
+            [chart.point.new(na,x,y), label.style_label_down]
+```
+
+Stage 1 emits this correctly (`case 'TOP': { let [x, y] = coords(...); return [...]; }`) — the damage
+is in **Stage 2's ArrayPattern split**, `AnalysisPass.ts` (~line 654): the declaration node is replaced
+IN PLACE by
+
+```ts
+                    Object.assign(node, { type: 'BlockStatement', body: [tempVarDecl, ...individualDecls] });
+```
+
+so the lowered `let x` / `let y` land in a NEW lexical block while the statements that use them (here
+the arm's return) stay in the enclosing one. Two further defects in the same function-local path, both
+visible in the emitted code — the temp is a plain JS local while the readers are pointed at the context
+store:
+
+```js
+              let temp_1 = $.call(...);            // written to a JS local …
+              let x = $.get($.let.temp_1, 0);      // … but read from $.let.temp_1 (never assigned)
+```
+
+At global scope the same split works because the elements become `$.let.glb1_x = $.init(...)` (context
+store), which a nested block cannot hide. So the fix has to (a) keep the declarations in the scope that
+uses them — splice them into the parent statement list (or mark the synthetic block and flatten it in
+the Stage-2 walkers) — and (b) make the temp's writer and readers agree on one store. Repro:
+`tools/repro/src/tuple-in-switch-arm.pine`, plus the real script; no fix, no partial fix, and above all
+no `[x, y]` simplification that passes — the shape only breaks inside a FUNCTION with a switch arm.
 
 #### For the record — the three hypotheses falsified on 29 Sep (superseded, kept so they are not retried)
 
