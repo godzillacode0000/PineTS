@@ -1,0 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { transpile } from '../src/transpiler/index';
+const src = readFileSync('/tmp/collision-lit.pine', 'utf8');
+const js = transpile(src, { debug: false }).toString();
+const re1 = /\.let\.\w+_p = \$\.init\(\.let\.\w+_p, 10\)/;
+const re2 = /\.let\.fn\d+_p = \$\.init\([^,]*, 10\)/;
+const re3 = /\$\$\.let\.fn\d+_p = \$\.init\(\$\$\.let\.fn\d+_p, 7\)/;
+console.log('re1:', re1.test(js));
+console.log('re2 (must be false):', re2.test(js));
+console.log('re3:', re3.test(js));
+const line = js.split('\n').find((l) => l.includes('10'));
+console.log('the 10 line:', JSON.stringify(line));
+console.log('re1 on that line:', re1.test(line));

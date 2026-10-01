@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * Two shapes of the same defect, both measured on the public Library (1 Oct 2026):
  *

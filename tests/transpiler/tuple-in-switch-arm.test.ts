@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * A tuple destructuring inside a `switch` arm lost its scope and its store, measured on
  * volume-bubbles-liquidity-heatmap (1 Oct). The arm is:

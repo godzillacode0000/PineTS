@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * Two operands that no walker ever descended into, both measured on the public Library (1 Oct):
  *
