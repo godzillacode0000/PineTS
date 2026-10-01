@@ -1,0 +1,16 @@
+//@version=6
+indicator("tuple-shape")
+
+type bucket
+    float buy
+    float sell
+
+bucket mk() =>
+    bucket lastBar = bucket.new(0.0, 0.0)
+    lastBar.buy  += volume
+    lastBar.sell += volume
+    [lastBar.buy, lastBar.sell]
+
+[b, s] = mk()
+plot(b, "buy")
+plot(s, "sell")

@@ -1,0 +1,11 @@
+//@version=6
+indicator("lag-probe")
+type cycle
+    int firstBarIndex
+var array<cycle> cycles = array.new<cycle>()
+if bar_index == 5
+    cycles.push(cycle.new(5))
+var float lag = na
+lag := bar_index - array.first(cycles).firstBarIndex
+plot(lag, "lag")
+plot(bar_index, "bi")

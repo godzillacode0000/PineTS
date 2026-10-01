@@ -1,0 +1,19 @@
+//@version=6
+indicator("name collision: a tuple element name reused as a plain local")
+split() =>
+    x = 1
+    y = 2
+    [x, y]
+[p, q] = split()
+w = switch
+    p > 0 =>
+        p = 10
+        p + 1
+    => 0
+f() =>
+    p = 7
+    p * 2
+u = f()
+plot(w)
+plot(u)
+plot(p)

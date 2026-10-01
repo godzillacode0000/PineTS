@@ -1,0 +1,5 @@
+//@version=6
+indicator("nested-index-in-param")
+nId = ta.barssince(close > open)
+lwst = math.min(high[nId[1]], low[nId[1]])
+plot(lwst)

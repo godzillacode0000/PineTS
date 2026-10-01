@@ -1,0 +1,8 @@
+//@version=6
+indicator("call-arg-in-param")
+type cycle
+    int firstBarIndex
+var array<cycle> timeCycles = array.new<cycle>()
+var float lowest = na
+lowest := ta.lowest(bar_index - array.first(timeCycles).firstBarIndex)
+plot(lowest)

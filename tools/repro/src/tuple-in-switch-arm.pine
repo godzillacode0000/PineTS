@@ -1,0 +1,18 @@
+//@version=6
+indicator("tuple-in-switch-arm")
+
+coords(int a, float b) =>
+    [a * 2, b * 3]
+
+draw(string which, int anchor, float price) =>
+    switch which
+        "TOP" =>
+            [x, y] = coords(anchor, price)
+            [chart.point.new(na, x, y), label.style_label_down]
+        =>
+            [x, y] = coords(anchor, price)
+            [chart.point.new(na, x, y), label.style_none]
+
+which = input.string("TOP")
+res = draw(which, bar_index, close)
+plot(close)
