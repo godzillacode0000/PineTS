@@ -443,11 +443,22 @@ export function transformVariableDeclaration(varNode: any, scopeManager: ScopeMa
                         // the AnalysisPass's ArrayPattern split (the `_tupleArity` temp, or a pattern
                         // element) goes through the standard lowering; everything else reached by this
                         // walk is a deliberate plain JS local of the IIFE and must stay one.
-                        VariableDeclaration(node: any) {
+                        VariableDeclaration(node: any, state: any, c: any) {
                             const isTupleSplit = node.declarations.some((d: any) =>
                                 d._tupleArity !== undefined ||
                                 (d.id && d.id.type === 'Identifier' && scopeManager.isArrayPatternElement(d.id.name)));
-                            if (isTupleSplit) transformVariableDeclaration(node, scopeManager);
+                            if (isTupleSplit) {
+                                transformVariableDeclaration(node, scopeManager);
+                                return;
+                            }
+                            // Not a tuple split: descend by hand, the way the base visitor would (a
+                            // custom visitor replaces the default descent). Only the INIT is walked —
+                            // the base visitor visits a declarator's id as a `Pattern`, so it is never
+                            // rewritten, and walking it as an Identifier emitted an invalid
+                            // `let $.get(e, 0) = …`.
+                            node.declarations.forEach((d: any) => {
+                                if (d.init) c(d.init, state);
+                            });
                         },
                         BinaryExpression(node: any, state: any, c: any) {
                             // Set parent references for operands
@@ -1606,11 +1617,23 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
                     // that nothing reads. Any OTHER declaration here is a deliberate plain JS local of
                     // the IIFE (a loop accumulator, for instance) and lowering it breaks it — measured
                     // as NaN tuples in tests/transpiler/tuple-parity.test.ts.
-                    VariableDeclaration(node: any, state: ScopeManager) {
+                    VariableDeclaration(node: any, state: ScopeManager, c: any) {
                         const isTupleSplit = node.declarations.some((d: any) =>
                             d._tupleArity !== undefined ||
                             (d.id && d.id.type === 'Identifier' && state.isArrayPatternElement(d.id.name)));
-                        if (isTupleSplit) transformVariableDeclaration(node, state);
+                        if (isTupleSplit) {
+                            transformVariableDeclaration(node, state);
+                            return;
+                        }
+                        // Not a tuple split: descend by hand the way the base visitor would — a custom
+                        // visitor REPLACES the default descent in acorn-walk. Only the INIT is walked:
+                        // the base visitor visits a declarator's id as a `Pattern` (so it is never
+                        // rewritten), and walking it as an Identifier emitted `let $.get(e, 0) = …`
+                        // (`SyntaxError: Unexpected token '.'`, measured by
+                        // tests/transpiler/switch-and-declaration-parsing.test.ts).
+                        node.declarations.forEach((d: any) => {
+                            if (d.init) c(d.init, state);
+                        });
                     },
                 });
             }
