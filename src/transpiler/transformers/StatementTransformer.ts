@@ -1159,6 +1159,41 @@ export function transformIfStatement(node: any, scopeManager: ScopeManager, c: a
 
 export function transformReturnStatement(node: any, scopeManager: ScopeManager): void {
     const curScope = scopeManager.getCurrentScopeType();
+
+    /* One visitor set for every expression a returned tuple can carry. Identifiers get scoped, a
+     * member chain's BASE gets scoped too (the missing recursion that left `MSS.dir` bare inside a
+     * switch arm also left `lastBar.buy` bare inside `return [[lastBar.buy, lastBar.sell]]`), and
+     * calls keep their own handling. */
+    const tupleExpressionVisitors = {
+        Identifier(node: any, state: ScopeManager) {
+            transformIdentifier(node, state);
+            if (node.type === 'Identifier' && !node._arrayAccessed) {
+                addArrayAccess(node, state);
+                node._arrayAccessed = true;
+            }
+        },
+        MemberExpression(node: any, state: ScopeManager, c: any) {
+            transformMemberExpression(node, '', scopeManager);
+            if (node.type === 'MemberExpression' && node.object &&
+                (node.object.type !== 'Identifier' || !scopeManager.isContextBound(node.object.name))) {
+                c(node.object, state);
+            }
+        },
+        CallExpression(node: any, state: ScopeManager, c: any) {
+            if (node.callee.type === 'ArrowFunctionExpression' || node.callee.type === 'FunctionExpression') {
+                c(node.callee, state);
+            }
+            transformCallExpression(node, state);
+            if (node.type === 'CallExpression') {
+                node.arguments.forEach((arg: any) => c(arg, state));
+            }
+        },
+        BinaryExpression(node: any, state: any, c: any) {
+            c(node.left, state);
+            c(node.right, state);
+        },
+    };
+
     // Transform the return argument if it exists
     if (node.argument) {
         if (node.argument.type === 'ArrayExpression') {
@@ -1206,6 +1241,11 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
                     // transformMemberExpression also gives NAMESPACES_LIKE members
                     // (`time[1]`, `na[0]`) their `.__value` unwrap.
                     transformMemberExpression(element, '', scopeManager);
+                    // Then walk it exactly like the complex-expression branch below: this element used
+                    // to be returned untouched, so a tuple member chain kept its BASE identifier bare
+                    // (`return [[lastBar.buy, lastBar.sell]]` → `ReferenceError: lastBar is not
+                    // defined`) while the same variable one line above came out scoped.
+                    walk.recursive(element, scopeManager, tupleExpressionVisitors);
                     return element;
                 } else if (
                     element.type === 'BinaryExpression' ||
@@ -1215,31 +1255,7 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
                     element.type === 'UnaryExpression'
                 ) {
                     // Walk into complex expressions and transform identifiers/members
-                    walk.recursive(element, scopeManager, {
-                        Identifier(node: any, state: ScopeManager) {
-                            transformIdentifier(node, state);
-                            if (node.type === 'Identifier' && !node._arrayAccessed) {
-                                addArrayAccess(node, state);
-                                node._arrayAccessed = true;
-                            }
-                        },
-                        MemberExpression(node: any) {
-                            transformMemberExpression(node, '', scopeManager);
-                        },
-                        CallExpression(node: any, state: ScopeManager, c: any) {
-                            if (node.callee.type === 'ArrowFunctionExpression' || node.callee.type === 'FunctionExpression') {
-                                c(node.callee, state);
-                            }
-                            transformCallExpression(node, state);
-                            if (node.type === 'CallExpression') {
-                                node.arguments.forEach((arg: any) => c(arg, state));
-                            }
-                        },
-                        BinaryExpression(node: any, state: any, c: any) {
-                            c(node.left, state);
-                            c(node.right, state);
-                        },
-                    });
+                    walk.recursive(element, scopeManager, tupleExpressionVisitors);
                     return element;
                 }
                 return element;
@@ -1403,8 +1419,20 @@ export function transformReturnStatement(node: any, scopeManager: ScopeManager):
                             node._arrayAccessed = true;
                         }
                     },
-                    MemberExpression(node: any) {
+                    MemberExpression(node: any, state: ScopeManager, c: any) {
                         transformMemberExpression(node, '', scopeManager);
+                        // Recurse into the object so a user variable's field read gets its BASE
+                        // scoped, exactly as every other member visitor in this file does. This
+                        // walker owns a method's IMPLICIT RETURN, and a `switch` there is a common
+                        // Pine shape — its arm tests are comparisons full of member chains. Without
+                        // the recursion, `MSS.dir` inside such an arm kept a bare base identifier
+                        // (`ReferenceError: MSS is not defined`) while the call chains beside it were
+                        // scoped by transformCallExpression. Measured 1 Oct on
+                        // market-structure-targets-model (the six-script class).
+                        if (node.type === 'MemberExpression' && node.object &&
+                            (node.object.type !== 'Identifier' || !scopeManager.isContextBound(node.object.name))) {
+                            c(node.object, state);
+                        }
                     },
                     // When an arrow function's last statement is an assignment
                     // (e.g. `tracker.field := …`), the parser folds it into the
