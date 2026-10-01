@@ -428,8 +428,15 @@ lowered an IIFE's own plain JS locals — a loop-as-expression's accumulator (`l
 answered NaN (`tests/transpiler/tuple-parity.test.ts`, the runtime half of `parser-fixes.test.ts`).
 Both visitors now route ONLY what the AnalysisPass's ArrayPattern split produced — the temp (marked
 `_tupleArity`) and the pattern elements — and a `for` header declaration is flagged and left alone so
-the header cannot be garbled (`SyntaxError: Unexpected token ';'`). Commit `073fbaa`; the three
-affected files are 126/126.
+the header cannot be garbled (`SyntaxError: Unexpected token ';'`). Commit `073fbaa`.
+
+**A second trap in the same fix** (`b001bed`): a custom visitor in acorn-walk's `walk.recursive`
+REPLACES the default descent rather than running beside it, so the narrowed visitor stopped the walk
+from reaching a declaration's initializer — `let e = src + 1` kept `src` bare
+(`tests/transpiler/switch-and-declaration-parsing.test.ts`). Both visitors now walk the init
+themselves, and never the id: the base visitor visits a declarator's id as a `Pattern`, and walking it
+as an Identifier emitted an invalid `let $.get(e, 0) = …` (`SyntaxError: Unexpected token '.'`). With
+that, the six affected files are 166/166 and the suite is back at its 16-failure baseline.
 
 #### The original diagnosis, kept for the record
 
