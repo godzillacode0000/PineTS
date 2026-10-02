@@ -4,8 +4,9 @@ See FINDINGS.md. These tools are development probes, not part of the shipped eng
 they read live outside this repo (they are the LuxAlgo Library indicators, pulled per request), so the
 probes are documented here rather than wired into the test suite.
 
-- `drawing-all-arrays.test.ts` — GREEN since patch 2 (`DrawingArray`): the 4 cases from the original
-  findings now pass. Run it explicitly with its own config (the repo suite's include never matched
+- `drawing-all-arrays.test.ts` — GREEN: the 4 cases from the original findings pass on v0.11.0
+  (upstream's own fix; the fork's patch 2 was dropped in the 2 Oct rebase). Run it explicitly with
+  its own config (the repo suite's include never matched
   `tools/repro/`, and under a foreign `--config` the `@pinets/*` aliases need the pinned root + direct
   alias the config now carries, 2 Oct):
   `./node_modules/.bin/vitest run --config tools/repro/vitest.repro.config.ts`

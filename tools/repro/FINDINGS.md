@@ -8,6 +8,14 @@ each). Both reproduce on `0.10.0`, which is also npm's latest and the repo's HEA
 > (the config gained a pinned root and a direct `@pinets/*` alias on 2 Oct so the file can run at all;
 > the bare command this README used never matched the suite's include). Everything below stays as the
 > measured record where a line does not say RESOLVED.
+>
+> **STATUS (2 Oct rebase, branch `fix/p1-p8-on-0.11`).** The audit's upstream check found that 0.11.0
+> fixes patches 2-7 in its own code, so the fork now carries only patch 1, patch 7's final form and
+> patch 8, rebased onto upstream `v0.11.0` (`c5e6b0e`). Suite on the rebased branch: 16 failed |
+> 2756 passed — the 16 are `pinescript.test.ts` names IDENTICAL to upstream `v0.11.0`'s own tree on
+> this machine (so the ports add no failures), and the 8 patch-test files plus the repro file are
+> green. The shipped bundle is NOT rebuilt from this branch yet — that waits on the
+> vela-pinets/Vela decision (vela-pinets >= 0.2.13 needs Vela >= 0.7.7).
 
 I tried to fix the first one; the patch made **6 more test files fail** (7 total, baseline is 1), so I
 reverted it rather than ship a change that trades one breakage for another. The failing test is kept
