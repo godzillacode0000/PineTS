@@ -3,6 +3,12 @@
 Found while running every indicator the LuxAlgo MCP serves through PineTS (797 sources, 500 bars
 each). Both reproduce on `0.10.0`, which is also npm's latest and the repo's HEAD.
 
+> **STATUS (2 Oct sweep).** Bug 1 is fixed: `DrawingArray` (patch 2) shipped and this report's repro
+> file is green — 4/4 pass with `./node_modules/.bin/vitest run --config tools/repro/vitest.repro.config.ts`
+> (the config gained a pinned root and a direct `@pinets/*` alias on 2 Oct so the file can run at all;
+> the bare command this README used never matched the suite's include). Everything below stays as the
+> measured record where a line does not say RESOLVED.
+
 I tried to fix the first one; the patch made **6 more test files fail** (7 total, baseline is 1), so I
 reverted it rather than ship a change that trades one breakage for another. The failing test is kept
 in `tools/repro/drawing-all-arrays.test.ts` — it is RED today and should go green with your choice of
