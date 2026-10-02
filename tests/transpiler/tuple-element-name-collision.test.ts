@@ -19,11 +19,17 @@
  * OPEN QUESTION — not asserted here, on purpose. The engine resolves a name to ONE store, so patch
  * 8's routing rule writes the arm's `p = 10` into the store the outer readers use: run this script
  * offline and the global `p` reads 10 afterwards. If Pine v6 SHADOWS instead (a `=` in a local block
- * declares a new local; outer `p` keeps 1), that is an engine-wide behaviour — every block-level
- * re-declaration, not this patch's rule — and my earlier expectation of 10 came from reasoning, not
- * from a TradingView run. Per the repo's own Golden Rule, expected values need an independent
- * reference: run `tests/repro/src/name-collision.pine`'s `plot(p)` on TradingView before asserting
+ * declares a new local; outer `p` keeps 1), the engine is not even consistent about it: the normal
+ * pipeline gives `if`/`else`/`for` blocks their own store (`if1_p`, `for1_p`), so only this walker path
+ * writes through. My earlier expectation of 10 came from reasoning, not from a TradingView run. Per the
+ * repo's own Golden Rule, expected values need an independent
+ * reference: run `tools/repro/src/name-collision.pine`'s `plot(p)` on TradingView before asserting
  * either number. Until then the outer `p` is recorded, not required.
+ *
+ * Which of these tests guard what: the history-read pair (the emitted-shape check and the `w` runtime
+ * check) fails on `073fbaa`; the literal-source pair passes there too — the literal case was the
+ * control that proved the name set's routing was inert for a plain init. Two of four is the honest
+ * count, and the round-3 check said so.
  */
 import { describe, it, expect } from 'vitest';
 import { transpile } from '../../src/transpiler/index';

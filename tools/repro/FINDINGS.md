@@ -563,11 +563,14 @@ still run, and the suite sits at its baseline (`16 failed | 2538 passed`).
 
 **Open question that test deliberately does not assert (the audit's follow-up, 2 Oct).** With patch 8's
 rule, the arm's `p = 10` writes the store the outer readers use: offline, the global `p` reads 10
-afterwards, and `p = close[1]` reads the previous close. If Pine v6 SHADOWS instead — a `=` in a local
-block declaring a new local, so the outer `p` keeps 1 — that is an engine-wide property (every
-block-level re-declaration resolves to one store, not just this rule), and the expected values in the
-test's first cut came from reasoning, not from a TradingView run. The test now asserts only what holds
-under either reading (`w`, `u`, and the absence of the tuple-read shape); the outer `p` is recorded
-here, not required. Check `plot(p)` for `tools/repro/src/name-collision.pine` on TradingView before
-relying on either number.
+afterwards, and `p = close[1]` reads the previous close. Whether Pine v6 does that or **shadows** (a
+`=` in a local block declaring a new local, so the outer `p` keeps 1) is exactly what needs a
+TradingView run — and the engine is not consistent about it either, which round 3 measured: the normal
+pipeline gives `if`, `else` and `for` blocks their own scope types (`ScopeManager.addVariable` →
+`if1_p`, `for1_p`), so the same declaration there gets its own store, while only the switch-arm walkers
+push no scope and patch 8's rule sends a known name to the enclosing store. So the write-through is
+specific to that walker path, not engine-wide — the earlier entry here overstated it. The test now
+asserts only what holds under either reading (`w`, `u`, and the absence of the tuple-read shape) and
+two of its four cases (the history-read pair) fail on `073fbaa`. Check `plot(p)` for
+`tools/repro/src/name-collision.pine` on TradingView before relying on either number.
 
