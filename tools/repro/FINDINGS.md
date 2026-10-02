@@ -561,3 +561,13 @@ store) while a fresh IIFE local stays a plain JS local. `tests/transpiler/tuple-
 (4 cases; the history-read pair fails on `073fbaa`, 2/4). The six scripts of the bare-member class all
 still run, and the suite sits at its baseline (`16 failed | 2538 passed`).
 
+**Open question that test deliberately does not assert (the audit's follow-up, 2 Oct).** With patch 8's
+rule, the arm's `p = 10` writes the store the outer readers use: offline, the global `p` reads 10
+afterwards, and `p = close[1]` reads the previous close. If Pine v6 SHADOWS instead — a `=` in a local
+block declaring a new local, so the outer `p` keeps 1 — that is an engine-wide property (every
+block-level re-declaration resolves to one store, not just this rule), and the expected values in the
+test's first cut came from reasoning, not from a TradingView run. The test now asserts only what holds
+under either reading (`w`, `u`, and the absence of the tuple-read shape); the outer `p` is recorded
+here, not required. Check `plot(p)` for `tools/repro/src/name-collision.pine` on TradingView before
+relying on either number.
+
